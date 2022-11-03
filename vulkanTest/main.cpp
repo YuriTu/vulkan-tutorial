@@ -5,6 +5,13 @@
 #include <stdexcept>
 #include <cstdlib>
 #include <vector>
+#include <optional>
+
+#ifdef NDEBUG 
+    const bool enableValidationLayer = false;
+#else 
+    const bool enableValidationLayer = true;
+#endif
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
@@ -12,12 +19,16 @@ const uint32_t HEIGHT = 600;
 const std::vector<const char*> validationLayers = {
     "VK_LAYER_KHRONOS_validation"
 };
+// 不能用uint32_t的原因：任何一个u32的数字包括0 都可能是一个有效的family index
+struct QueueFamilyIndices
+{
+    std::optional<uint32_t> graphicesFamily;
 
-#ifdef NDEBUG 
-    const bool enableValidationLayer = false;
-#else 
-    const bool enableValidationLayer = true;
-#endif
+    bool isComplete(){
+        return graphicesFamily.has_value();
+    }
+};
+
 
 
 class HelloTriangleApplication {
@@ -139,6 +150,32 @@ private:
         return extensions;
     }
 
+    QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
+        QueueFamilyIndices indeces;
+
+        uint32_t queueFamilyCount = 0;
+        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+        std::vector<VkQueueFamilyProperties> queueFamilies (queueFamilyCount);
+        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+
+
+        int i = 0;
+        for (const auto& queueFamily : queueFamilies) {
+            // flag 表示这个family中的queue的能力 是支持graphics指令的
+            
+            if (queueFamily.queueFlags == VK_QUEUE_GRAPHICS_BIT) {
+                indeces.graphicesFamily = i;
+            }
+            if (indeces.isComplete()) {
+                break;
+            }
+            i++;
+        }
+        
+
+        return indeces;
+    }
+
     void initVulkan() {
         createInstance();
         // setupDebugMessage()
@@ -146,13 +183,20 @@ private:
     }
 
     bool isDeviceSuitable(VkPhysicalDevice device) {
-        // 主要是硬件的属性 api版本驱动版本
-        VkPhysicalDeviceProperties deviceProperties;
-        vkGetPhysicalDeviceProperties(device, &deviceProperties);
-        // 主要是shader特性 支持depth、shader float一类的
-        VkPhysicalDeviceFeatures deviceFeatures;
-        vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
-        return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && deviceFeatures.geometryShader;
+
+        // // 主要是硬件的属性 api版本驱动版本
+        // VkPhysicalDeviceProperties deviceProperties;
+        // vkGetPhysicalDeviceProperties(device, &deviceProperties);
+        // // 主要是shader特性 支持depth、shader float一类的
+        // VkPhysicalDeviceFeatures deviceFeatures;
+        // vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+        // return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && deviceFeatures.geometryShader;
+
+
+        // queueFamily 部分
+        QueueFamilyIndices indices = findQueueFamilies(device);
+
+        return indices.isComplete();
     }
 
 
