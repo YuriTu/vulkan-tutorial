@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <vector>
 #include <optional>
+#include <set>
 
 
 
@@ -16,19 +17,20 @@ const std::vector<const char*> validationLayers = {
     "VK_LAYER_KHRONOS_validation"
 };
 
-#ifdef NDEBUG 
+// #ifdef NDEBUG 
     const bool enableValidationLayer = false;
-#else 
-    const bool enableValidationLayer = true;
-#endif
+// #else 
+//     const bool enableValidationLayer = true;
+// #endif
 
 // 不能用uint32_t的原因：任何一个u32的数字包括0 都可能是一个有效的family index
 struct QueueFamilyIndices
 {
     std::optional<uint32_t> graphicesFamily;
+    std::optional<uint32_t> presentFamily;
 
     bool isComplete(){
-        return graphicesFamily.has_value();
+        return graphicesFamily.has_value() && presentFamily.has_value();
     }
 };
 
@@ -47,6 +49,10 @@ private:
     GLFWwindow* window;
     VkInstance instance;
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+    VkDevice device;
+    VkQueue graphicsQueue;
+    VkSurfaceKHR surface;
+    VkQueue presentQueue;
 
     void initWindow() {
         glfwInit();
@@ -59,7 +65,6 @@ private:
         if (enableValidationLayer && !checkValidationLayerSupport()) {
             throw std::runtime_error("validation layers requestd, but not available!");
         }
-
 
         VkApplicationInfo appInfo{};
         appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -193,40 +198,105 @@ private:
     }
 
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
-        QueueFamilyIndices indeces;
+        QueueFamilyIndices indices;
 
         uint32_t queueFamilyCount = 0;
         vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
         std::vector<VkQueueFamilyProperties> queueFamilies (queueFamilyCount);
         vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
 
-
+        VkBool32 presentSupport = false;
         int i = 0;
         for (const auto& queueFamily : queueFamilies) {
             // flag 表示这个family中的queue的能力 是支持graphics指令的
             // 注意这里是& 不是== flags包含很多功能
             if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-                indeces.graphicesFamily = i;
+                indices.graphicesFamily = i;
             }
-            if (indeces.isComplete()) {
+            vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
+
+            if (presentSupport) {
+                indices.presentFamily = i;
+            }
+
+            if (indices.isComplete()) {
                 break;
             }
             i++;
         }
         
+        
+        
 
-        return indeces;
+
+        return indices;
+    }
+
+    void createLogicalDevice() {
+        QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
+
+        std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+        std::vector<uint32_t> uniqueQueueFamilies = {
+            indices.graphicesFamily.value(),indices.presentFamily.value()
+        };
+        const float priorities = 1.0f;
+
+        for (uint32_t queueFamily : uniqueQueueFamilies) {
+            VkDeviceQueueCreateInfo queueCreateInfo{};
+            
+            // 多线程的显示queue
+            
+            queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+            queueCreateInfo.queueFamilyIndex = indices.graphicesFamily.value();
+            // 一般不需要1个以上的队列 会在多线程中创建command buffer 然后提交一次主线程
+            queueCreateInfo.queueCount = 1;
+            
+            queueCreateInfo.pQueuePriorities = &priorities;
+
+            queueCreateInfos.push_back(queueCreateInfo);
+        }
+
+
+        // 设备特性
+        VkPhysicalDeviceFeatures deviceFeatures {};
+        
+        VkDeviceCreateInfo createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        createInfo.pQueueCreateInfos = queueCreateInfos.data();
+        createInfo.queueCreateInfoCount = queueCreateInfos.size();
+        createInfo.pEnabledFeatures = &deviceFeatures;
+
+        createInfo.enabledExtensionCount = 0;
+
+        if (enableValidationLayer) {
+
+        } else {
+            createInfo.enabledLayerCount = 0;
+        }
+
+        if (vkCreateDevice(physicalDevice,&createInfo,nullptr,&device) != VK_SUCCESS){
+            throw std::runtime_error("failed to create logical device");
+        }
+        // 硬件handle 让logical 和queue联系
+        vkGetDeviceQueue(device,indices.graphicesFamily.value(),0,&graphicsQueue);
+        // 软件handle 让surface 和queue联系
+        vkGetDeviceQueue(device, indices.presentFamily.value(), 0, &presentQueue);
+        
+    }
+
+    void createSurface() {
+        if (glfwCreateWindowSurface(instance, window, nullptr, &surface) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create window surface!");
+        }
     }
 
     void initVulkan() {
         createInstance();
         // setupDebugMessage()
+        createSurface();
         pickPhysicalDevice();
+        createLogicalDevice();
     }
-
-
-
-    
 
     void mainLoop() {
         while (!glfwWindowShouldClose(window)) {
@@ -235,7 +305,9 @@ private:
     }
 
     void cleanup() {
+        vkDestroySurfaceKHR(instance, surface, nullptr);
         vkDestroyInstance(instance, nullptr);
+        vkDestroyDevice(device,nullptr);
 
         glfwDestroyWindow(window);
 
