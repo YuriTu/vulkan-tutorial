@@ -16,6 +16,9 @@ const uint32_t HEIGHT = 600;
 const std::vector<const char*> validationLayers = {
     "VK_LAYER_KHRONOS_validation"
 };
+const std::vector<const char*> deviceExtensions = {
+    VK_KHR_SWAPCHAIN_EXTENSION_NAME
+};
 
 // #ifdef NDEBUG 
     const bool enableValidationLayer = false;
@@ -34,6 +37,12 @@ struct QueueFamilyIndices
     }
 };
 
+struct SwapChainSupportDetails {
+    VkSurfaceCapabilitiesKHR capabilities;
+    std::vector<VkSurfaceFormatKHR> formates;
+    std::vector<VkPresentModeKHR> presentModes;
+
+};
 
 
 class HelloTriangleApplication {
@@ -193,8 +202,16 @@ private:
 
         // queueFamily 部分
         QueueFamilyIndices indices = findQueueFamilies(device);
+        // swap chain KHR插件可用性
+        bool extensionSupported = checkExtensionSupport(device);
+        // swap chain 功能可用性
+        bool swapChainAdequate = false;
+        if (extensionSupported) {
+            SwapChainSupportDetails swapChainSupport = querySwapChainSupport(device);
+            swapChainAdequate = !swapChainSupport.formates.empty() && !swapChainSupport.presentModes.empty();
+        }
 
-        return indices.isComplete();
+        return indices.isComplete() && extensionSupported && swapChainAdequate;
     }
 
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
@@ -213,6 +230,7 @@ private:
             if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
                 indices.graphicesFamily = i;
             }
+            // 这里判断queue能力是否支持surface能力 queue的能力是特定的
             vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
 
             if (presentSupport) {
@@ -230,6 +248,49 @@ private:
 
 
         return indices;
+    }
+
+
+    bool checkExtensionSupport(VkPhysicalDevice device){
+        uint32_t extensionCount;
+        vkEnumerateDeviceExtensionProperties(device,nullptr, &extensionCount, nullptr);
+        std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+        vkEnumerateDeviceExtensionProperties(device,nullptr,&extensionCount,availableExtensions.data());
+
+        std::set<std::string> requireExtensions (deviceExtensions.begin(),deviceExtensions.end());
+
+        // 看可用的extension中有没有必须的extension
+        for (const auto& extension : availableExtensions) {
+            // 删除对应的元素
+            requireExtensions.erase(extension.extensionName);
+        }
+
+
+        return requireExtensions.empty();
+    }
+
+    SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device) {
+        SwapChainSupportDetails details;
+        // 基本表面能力
+        vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities);
+
+        // 表面格式
+        uint32_t formatCount;
+        vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, nullptr);
+
+        if (formatCount != 0 ) {
+            details.formates.resize(formatCount);
+        }
+
+        // 显示模式
+        uint32_t presentModeCount;
+        vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, nullptr);
+        if (presentModeCount != 0){
+            details.presentModes.resize(presentModeCount);
+            vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, details.presentModes.data());
+        }
+
+        return details;
     }
 
     void createLogicalDevice() {
@@ -277,9 +338,9 @@ private:
         if (vkCreateDevice(physicalDevice,&createInfo,nullptr,&device) != VK_SUCCESS){
             throw std::runtime_error("failed to create logical device");
         }
-        // 硬件handle 让logical 和queue联系
+        // 硬件handle 让logical层创建对应的负责图形命令的queue
         vkGetDeviceQueue(device,indices.graphicesFamily.value(),0,&graphicsQueue);
-        // 软件handle 让surface 和queue联系
+        // 创建负责展示的queue队列
         vkGetDeviceQueue(device, indices.presentFamily.value(), 0, &presentQueue);
         
     }
