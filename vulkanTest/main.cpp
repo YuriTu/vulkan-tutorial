@@ -20,20 +20,20 @@ const std::vector<const char*> deviceExtensions = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME
 };
 
-// #ifdef NDEBUG 
+#ifdef NDEBUG 
     const bool enableValidationLayer = false;
-// #else 
-//     const bool enableValidationLayer = true;
-// #endif
+#else 
+    const bool enableValidationLayer = true;
+#endif
 
 // 不能用uint32_t的原因：任何一个u32的数字包括0 都可能是一个有效的family index
 struct QueueFamilyIndices
 {
-    std::optional<uint32_t> graphicesFamily;
+    std::optional<uint32_t> graphicsFamily;
     std::optional<uint32_t> presentFamily;
 
     bool isComplete(){
-        return graphicesFamily.has_value() && presentFamily.has_value();
+        return graphicsFamily.has_value() && presentFamily.has_value();
     }
 };
 
@@ -68,12 +68,16 @@ private:
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
         window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
+        std::cout << "create glfw window done" << std::endl;
     }
 
     void createInstance() {
+        std::cout << "create instance start" << std::endl;
         if (enableValidationLayer && !checkValidationLayerSupport()) {
             throw std::runtime_error("validation layers requestd, but not available!");
         }
+
+        std::cout << "create instance doing 1" << std::endl;
 
         VkApplicationInfo appInfo{};
         appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -112,6 +116,7 @@ private:
         if (vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS) {
             throw std::runtime_error("failled to create instance!");
         }
+        std::cout << "create instance done" << std::endl;
     }
 
     bool checkValidationLayerSupport() {
@@ -228,7 +233,7 @@ private:
             // flag 表示这个family中的queue的能力 是支持graphics指令的
             // 注意这里是& 不是== flags包含很多功能
             if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-                indices.graphicesFamily = i;
+                indices.graphicsFamily = i;
             }
             // 这里判断queue能力是否支持surface能力 queue的能力是特定的
             vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
@@ -242,15 +247,10 @@ private:
             }
             i++;
         }
-        
-        
-        
-
 
         return indices;
     }
-
-
+    
     bool checkExtensionSupport(VkPhysicalDevice device){
         uint32_t extensionCount;
         vkEnumerateDeviceExtensionProperties(device,nullptr, &extensionCount, nullptr);
@@ -298,7 +298,7 @@ private:
 
         std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
         std::vector<uint32_t> uniqueQueueFamilies = {
-            indices.graphicesFamily.value(),indices.presentFamily.value()
+            indices.graphicsFamily.value(),indices.presentFamily.value()
         };
         const float priorities = 1.0f;
 
@@ -308,7 +308,7 @@ private:
             // 多线程的显示queue
             
             queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-            queueCreateInfo.queueFamilyIndex = indices.graphicesFamily.value();
+            queueCreateInfo.queueFamilyIndex = queueFamily;
             // 一般不需要1个以上的队列 会在多线程中创建command buffer 然后提交一次主线程
             queueCreateInfo.queueCount = 1;
             
@@ -330,7 +330,8 @@ private:
         createInfo.enabledExtensionCount = 0;
 
         if (enableValidationLayer) {
-
+            createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+            createInfo.ppEnabledLayerNames = validationLayers.data();
         } else {
             createInfo.enabledLayerCount = 0;
         }
@@ -339,7 +340,7 @@ private:
             throw std::runtime_error("failed to create logical device");
         }
         // 硬件handle 让logical层创建对应的负责图形命令的queue
-        vkGetDeviceQueue(device,indices.graphicesFamily.value(),0,&graphicsQueue);
+        vkGetDeviceQueue(device,indices.graphicsFamily.value(),0,&graphicsQueue);
         // 创建负责展示的queue队列
         vkGetDeviceQueue(device, indices.presentFamily.value(), 0, &presentQueue);
         
