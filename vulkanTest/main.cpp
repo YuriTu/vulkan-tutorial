@@ -39,10 +39,22 @@ struct QueueFamilyIndices
 
 struct SwapChainSupportDetails {
     VkSurfaceCapabilitiesKHR capabilities;
-    std::vector<VkSurfaceFormatKHR> formates;
+    std::vector<VkSurfaceFormatKHR> formats;
     std::vector<VkPresentModeKHR> presentModes;
 
 };
+
+VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, 
+    const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger
+){
+    // ext不会自动load，所以要在这类处理
+    auto func = (PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+    if (func != nullptr) {
+        return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
+    } else {
+        return VK_ERROR_EXTENSION_NOT_PRESENT;
+    }
+}
 
 
 class HelloTriangleApplication {
@@ -57,6 +69,7 @@ public:
 private:
     GLFWwindow* window;
     VkInstance instance;
+    VkDebugUtilsMessengerEXT debugMessenger;
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     VkDevice device;
     VkQueue graphicsQueue;
@@ -133,6 +146,7 @@ private:
             bool layerFound = false;
 
             for (const auto& layerProperties : availableLayer) {
+                // 字符串对比
                 if (strcmp(layerName, layerProperties.layerName) == 0) {
                     layerFound = true;
                     break;
@@ -145,7 +159,7 @@ private:
         }
         return true;
     }
-
+    //VKAPI_ATTR  c 的预处理器 preprocesser 用来给不同的编辑器做提示的 spec：https://registry.khronos.org/vulkan/specs/1.0-extensions/html/vkspec.html#boilerplate-platform-specific-calling-conventions
     static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
         VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
         VkDebugUtilsMessageTypeFlagsEXT messageType,
@@ -154,9 +168,16 @@ private:
     ) {
         std::cerr << "Validation layer:" << pCallbackData->pMessage << std::endl;
 
+        if (messageType >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+
+        }
+
+        // 行为是否应该被中断
         return VK_FALSE;
     }
 
+
+    // 根据是否启用validation 返回需要的extension列表
     std::vector<const char*> getRequiredExtensions() {
         uint32_t extensionCount = 0;
         const char** glfwExtensions;
@@ -172,6 +193,30 @@ private:
         return extensions;
     }
 
+    void setupDebugMessenger() {
+        if (!enableValidationLayer) return;
+        VkDebugUtilsMessengerCreateInfoEXT createInfo {};
+        createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+        // 消息级别
+        createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+        // 消息类型 
+        createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+        createInfo.pfnUserCallback = debugCallback;
+        createInfo.pUserData = nullptr;
+
+        if (CreateDebugUtilsMessengerEXT(instance, &createInfo, nullptr, &debugMessenger)) {
+            throw std::runtime_error("failed set up debug messenger");
+        }
+    }
+
+    void destroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessage, const VkAllocationCallbacks* pAllocator){
+        auto func = (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+        if (func != nullptr) {
+            func(instance, debugMessenger, pAllocator);
+        }
+    }
+   
+
     void pickPhysicalDevice() {
         uint32_t deviceCount = 0;
         vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
@@ -186,6 +231,7 @@ private:
         for (const auto& device : devices) {
             if (isDeviceSuitable(device)){
                 physicalDevice = device;
+                break;
             }
         }
 
@@ -213,12 +259,12 @@ private:
         bool swapChainAdequate = false;
         if (extensionSupported) {
             SwapChainSupportDetails swapChainSupport = querySwapChainSupport(device);
-            swapChainAdequate = !swapChainSupport.formates.empty() && !swapChainSupport.presentModes.empty();
+            swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
         }
 
         return indices.isComplete() && extensionSupported && swapChainAdequate;
     }
-
+    // 问题可能不在这里，index选出来都是0
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
         QueueFamilyIndices indices;
 
@@ -233,12 +279,14 @@ private:
             // flag 表示这个family中的queue的能力 是支持graphics指令的
             // 注意这里是& 不是== flags包含很多功能
             if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+                std::cout << "graph index" << i << std::endl;
                 indices.graphicsFamily = i;
             }
             // 这里判断queue能力是否支持surface能力 queue的能力是特定的
             vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
 
             if (presentSupport) {
+                std::cout << "present index" << i << std::endl;
                 indices.presentFamily = i;
             }
 
@@ -247,9 +295,12 @@ private:
             }
             i++;
         }
-
+        std::cout << "graph index" << i << std::endl;
+        std::cout << indices.graphicsFamily.value() << " pre:" << indices.presentFamily.value() << std::endl;
         return indices;
     }
+
+    
     
     bool checkExtensionSupport(VkPhysicalDevice device){
         uint32_t extensionCount;
@@ -279,7 +330,7 @@ private:
         vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, nullptr);
 
         if (formatCount != 0 ) {
-            details.formates.resize(formatCount);
+            details.formats.resize(formatCount);
         }
 
         // 显示模式
@@ -354,9 +405,9 @@ private:
 
     void initVulkan() {
         createInstance();
-        // setupDebugMessage()
+        setupDebugMessenger();
         createSurface();
-        pickPhysicalDevice();
+        // pickPhysicalDevice();
         createLogicalDevice();
     }
 
@@ -367,6 +418,11 @@ private:
     }
 
     void cleanup() {
+
+        if (enableValidationLayer) {
+            destroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
+        }
+
         vkDestroySurfaceKHR(instance, surface, nullptr);
         vkDestroyInstance(instance, nullptr);
         vkDestroyDevice(device,nullptr);
