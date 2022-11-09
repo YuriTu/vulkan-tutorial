@@ -107,10 +107,15 @@ private:
         auto extensions = getRequiredExtensions();
         createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
         createInfo.ppEnabledExtensionNames = extensions.data();
-
+        // 放外面的原因是 如果出现了destory或者create之前的错误
+        // 等于多创建了一个info create的时候就会使用
+        VkDebugUtilsMessengerCreateInfoEXT debugInfo{};
         if (enableValidationLayer) {
             createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
             createInfo.ppEnabledLayerNames = validationLayers.data();
+
+            polulateDebugMessengerCreateInfo(debugInfo);
+            createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*) &debugInfo;
         } else {
             createInfo.enabledLayerCount = 0;
         }
@@ -193,26 +198,33 @@ private:
         return extensions;
     }
 
-    void setupDebugMessenger() {
-        if (!enableValidationLayer) return;
-        VkDebugUtilsMessengerCreateInfoEXT createInfo {};
-        createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-        // 消息级别
-        createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-        // 消息类型 
-        createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-        createInfo.pfnUserCallback = debugCallback;
-        createInfo.pUserData = nullptr;
-
-        if (CreateDebugUtilsMessengerEXT(instance, &createInfo, nullptr, &debugMessenger)) {
-            throw std::runtime_error("failed set up debug messenger");
-        }
-    }
+    
 
     void destroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessage, const VkAllocationCallbacks* pAllocator){
         auto func = (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
         if (func != nullptr) {
             func(instance, debugMessenger, pAllocator);
+        }
+    }
+
+    void polulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo){
+        createInfo = {};
+        createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+        // 消息级别
+        createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+         // 消息类型 
+        createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+        createInfo.pfnUserCallback = debugCallback;
+    }
+
+    void setupDebugMessenger() {
+        if (!enableValidationLayer) return;
+        VkDebugUtilsMessengerCreateInfoEXT createInfo {};
+
+        polulateDebugMessengerCreateInfo(createInfo);
+
+        if (CreateDebugUtilsMessengerEXT(instance, &createInfo, nullptr, &debugMessenger)) {
+            throw std::runtime_error("failed set up debug messenger");
         }
     }
    
@@ -406,9 +418,9 @@ private:
     void initVulkan() {
         createInstance();
         setupDebugMessenger();
-        createSurface();
+        // createSurface();
         // pickPhysicalDevice();
-        createLogicalDevice();
+        // createLogicalDevice();
     }
 
     void mainLoop() {
@@ -423,9 +435,9 @@ private:
             destroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
         }
 
-        vkDestroySurfaceKHR(instance, surface, nullptr);
+        // vkDestroySurfaceKHR(instance, surface, nullptr);
         vkDestroyInstance(instance, nullptr);
-        vkDestroyDevice(device,nullptr);
+        // vkDestroyDevice(device,nullptr);
 
         glfwDestroyWindow(window);
 
