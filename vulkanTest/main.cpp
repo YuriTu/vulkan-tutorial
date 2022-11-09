@@ -3,8 +3,10 @@
 
 #include <iostream>
 #include <stdexcept>
-#include <cstdlib>
 #include <vector>
+#include <cstring>
+#include <cstdlib>
+
 #include <optional>
 #include <set>
 
@@ -21,9 +23,9 @@ const std::vector<const char*> deviceExtensions = {
 };
 
 #ifdef NDEBUG 
-    const bool enableValidationLayer = false;
+    const bool enableValidationLayers = false;
 #else 
-    const bool enableValidationLayer = true;
+    const bool enableValidationLayers = true;
 #endif
 
 // 不能用uint32_t的原因：任何一个u32的数字包括0 都可能是一个有效的family index
@@ -44,10 +46,10 @@ struct SwapChainSupportDetails {
 
 };
 
-VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, 
-    const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger
+// ext不会自动load，所以要在这类处理
+VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger
 ){
-    // ext不会自动load，所以要在这类处理
+    
     auto func = (PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
     if (func != nullptr) {
         return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
@@ -56,6 +58,12 @@ VkResult CreateDebugUtilsMessengerEXT(VkInstance instance,
     }
 }
 
+void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator){
+    auto func = (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+    if (func != nullptr) {
+        func(instance, debugMessenger, pAllocator);
+    }
+}
 
 class HelloTriangleApplication {
 public:
@@ -84,9 +92,38 @@ private:
         std::cout << "create glfw window done" << std::endl;
     }
 
+    void initVulkan() {
+        createInstance();
+        setupDebugMessenger();
+        // createSurface();
+        // pickPhysicalDevice();
+        // createLogicalDevice();
+    }
+
+    void mainLoop() {
+        while (!glfwWindowShouldClose(window)) {
+            glfwPollEvents();
+        }
+    }
+
+    void cleanup() {
+
+        if (enableValidationLayers) {
+            DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
+        }
+
+        // vkDestroySurfaceKHR(instance, surface, nullptr);
+        vkDestroyInstance(instance, nullptr);
+        // vkDestroyDevice(device,nullptr);
+
+        glfwDestroyWindow(window);
+
+        glfwTerminate();
+    }
+
     void createInstance() {
         std::cout << "create instance start" << std::endl;
-        if (enableValidationLayer && !checkValidationLayerSupport()) {
+        if (enableValidationLayers && !checkValidationLayerSupport()) {
             throw std::runtime_error("validation layers requestd, but not available!");
         }
 
@@ -95,9 +132,9 @@ private:
         VkApplicationInfo appInfo{};
         appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
         appInfo.pApplicationName = "Hello Triangle";
-        appInfo.applicationVersion = VK_MAKE_VERSION(1,0,0);
+        appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
         appInfo.pEngineName = "No Engine";
-        appInfo.engineVersion = VK_MAKE_VERSION(1,0,0);
+        appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
         appInfo.apiVersion = VK_API_VERSION_1_0;
 
         VkInstanceCreateInfo createInfo{};
@@ -109,15 +146,17 @@ private:
         createInfo.ppEnabledExtensionNames = extensions.data();
         // 放外面的原因是 如果出现了destory或者create之前的错误
         // 等于多创建了一个info create的时候就会使用
-        VkDebugUtilsMessengerCreateInfoEXT debugInfo{};
-        if (enableValidationLayer) {
+        VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
+        if (enableValidationLayers) {
             createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
             createInfo.ppEnabledLayerNames = validationLayers.data();
 
-            polulateDebugMessengerCreateInfo(debugInfo);
-            createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*) &debugInfo;
+            populateDebugMessengerCreateInfo(debugCreateInfo);
+            createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*) &debugCreateInfo;
         } else {
             createInfo.enabledLayerCount = 0;
+
+            createInfo.pNext = nullptr;
         }
         
 
@@ -132,7 +171,7 @@ private:
         
 
         if (vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS) {
-            throw std::runtime_error("failled to create instance!");
+            throw std::runtime_error("failed to create instance!");
         }
         std::cout << "create instance done" << std::endl;
     }
@@ -191,7 +230,7 @@ private:
 
         std::vector<const char*> extensions(glfwExtensions, glfwExtensions + extensionCount);
         // 并带上debug的ext
-        if (enableValidationLayer) {
+        if (enableValidationLayers) {
             extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
         }
 
@@ -200,14 +239,9 @@ private:
 
     
 
-    void destroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessage, const VkAllocationCallbacks* pAllocator){
-        auto func = (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
-        if (func != nullptr) {
-            func(instance, debugMessenger, pAllocator);
-        }
-    }
+    
 
-    void polulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo){
+    void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo){
         createInfo = {};
         createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
         // 消息级别
@@ -218,10 +252,10 @@ private:
     }
 
     void setupDebugMessenger() {
-        if (!enableValidationLayer) return;
+        if (!enableValidationLayers) return;
         VkDebugUtilsMessengerCreateInfoEXT createInfo {};
 
-        polulateDebugMessengerCreateInfo(createInfo);
+        populateDebugMessengerCreateInfo(createInfo);
 
         if (CreateDebugUtilsMessengerEXT(instance, &createInfo, nullptr, &debugMessenger)) {
             throw std::runtime_error("failed set up debug messenger");
@@ -392,7 +426,7 @@ private:
 
         createInfo.enabledExtensionCount = 0;
 
-        if (enableValidationLayer) {
+        if (enableValidationLayers) {
             createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
             createInfo.ppEnabledLayerNames = validationLayers.data();
         } else {
@@ -415,34 +449,7 @@ private:
         }
     }
 
-    void initVulkan() {
-        createInstance();
-        setupDebugMessenger();
-        // createSurface();
-        // pickPhysicalDevice();
-        // createLogicalDevice();
-    }
-
-    void mainLoop() {
-        while (!glfwWindowShouldClose(window)) {
-            glfwPollEvents();
-        }
-    }
-
-    void cleanup() {
-
-        if (enableValidationLayer) {
-            destroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
-        }
-
-        // vkDestroySurfaceKHR(instance, surface, nullptr);
-        vkDestroyInstance(instance, nullptr);
-        // vkDestroyDevice(device,nullptr);
-
-        glfwDestroyWindow(window);
-
-        glfwTerminate();
-    }
+    
 };
 
 int main() {
