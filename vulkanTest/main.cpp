@@ -8,6 +8,10 @@
 #include <cstdlib>
 #include <optional>
 #include <set>
+#include <cstdint> // uint32_t
+#include <limits>
+#include <algorithm>
+
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
@@ -53,7 +57,7 @@ struct QueueFamilyIndices {
         return graphicsFamily.has_value() && presentFamily.has_value();
     }
 };
-
+// swapchain的具体功能
 struct SwapChainSupportDetails {
     VkSurfaceCapabilitiesKHR capabilities;
     std::vector<VkSurfaceFormatKHR> formats;
@@ -61,6 +65,46 @@ struct SwapChainSupportDetails {
 
 };
 
+VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats) {
+    for (const auto& availableFormat : availableFormats) {
+        if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+            return availableFormat;
+        }
+    }
+    return availableFormats[0];
+}
+
+VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes) {
+    // 类似垂直同步的一种策略 移动设备上省电 
+    // VK_PRESENT_MODE_MAILBOX_KHR 在pc上更合适
+    for (const auto& availablePresentMode : availablePresentModes) {
+        if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
+            return availablePresentMode;
+        }
+    }
+
+    return VK_PRESENT_MODE_FIFO_KHR;
+}
+// 类似于设置capabilities 主要处理分辨率的事情 currentExtent表示目前适合的分辨率
+// 如果是glfw会有视网膜屏的问题
+VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities) {
+    if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
+        return capabilities.currentExtent;
+    } else {
+        int width, height;
+        // glfwGetFramebufferSize(window, &width, &height);
+
+        VkExtent2D actualExtent = {
+            static_cast<uint32_t>(width),
+            static_cast<uint32_t>(height)
+        };
+
+        actualExtent.width = std::clamp(actualExtent.width, capabilities.minImageCount.width, capabilities.maxImageExtent.width);
+        actualExtent.height = std::clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
+
+        return actualExtent;
+    }
+}
 
 class HelloTriangleApplication {
 public:
@@ -141,10 +185,14 @@ private:
         VkInstanceCreateInfo createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
         createInfo.pApplicationInfo = &appInfo;
+        // 这里需要启用的插件设计两种情况，一种是validation 一种是swapchain
+        // auto extensions = getRequiredExtensions();
+        // createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+        // createInfo.ppEnabledExtensionNames = extensions.data();
 
-        auto extensions = getRequiredExtensions();
-        createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
-        createInfo.ppEnabledExtensionNames = extensions.data();
+        createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
+        createInfo.ppEnabledExtensionNames = deviceExtensions.data();
+
         // 放外面的原因是 如果出现了destory或者create之前的错误
         // 等于多创建了一个info create的时候就会使用
         VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
@@ -342,16 +390,16 @@ private:
         // queueFamily 部分
         QueueFamilyIndices indices = findQueueFamilies(device);
         // // swap chain KHR插件可用性
-        // bool extensionSupported = checkExtensionSupport(device);
+        bool extensionSupported = checkDeviceExtensionSupport(device);
         // // swap chain 功能可用性
-        // bool swapChainAdequate = false;
-        // if (extensionSupported) {
-        //     SwapChainSupportDetails swapChainSupport = querySwapChainSupport(device);
-        //     swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
-        // }
+        bool swapChainAdequate = false;
+        if (extensionSupported) {
+            SwapChainSupportDetails swapChainSupport = querySwapChainSupport(device);
+            swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
+        }
 
-        // return indices.isComplete() && extensionSupported && swapChainAdequate;
-        return indices.isComplete();
+        return indices.isComplete() && extensionSupported && swapChainAdequate;
+        
     }
     // 问题可能不在这里，index选出来都是0
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
@@ -390,7 +438,7 @@ private:
 
     
     
-    bool checkExtensionSupport(VkPhysicalDevice device){
+    bool checkDeviceExtensionSupport(VkPhysicalDevice device){
         uint32_t extensionCount;
         vkEnumerateDeviceExtensionProperties(device,nullptr, &extensionCount, nullptr);
         std::vector<VkExtensionProperties> availableExtensions(extensionCount);
@@ -403,7 +451,6 @@ private:
             // 删除对应的元素
             requiredExtensions.erase(extension.extensionName);
         }
-
 
         return requiredExtensions.empty();
     }
@@ -419,11 +466,13 @@ private:
 
         if (formatCount != 0 ) {
             details.formats.resize(formatCount);
+            vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, details.formats.data());
         }
 
         // 显示模式
         uint32_t presentModeCount;
         vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, nullptr);
+
         if (presentModeCount != 0){
             details.presentModes.resize(presentModeCount);
             vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, details.presentModes.data());
