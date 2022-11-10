@@ -412,16 +412,16 @@ private:
         std::vector<VkExtensionProperties> availableExtensions(extensionCount);
         vkEnumerateDeviceExtensionProperties(device,nullptr,&extensionCount,availableExtensions.data());
 
-        std::set<std::string> requireExtensions (deviceExtensions.begin(),deviceExtensions.end());
+        std::set<std::string> requiredExtensions (deviceExtensions.begin(),deviceExtensions.end());
 
         // 看可用的extension中有没有必须的extension
         for (const auto& extension : availableExtensions) {
             // 删除对应的元素
-            requireExtensions.erase(extension.extensionName);
+            requiredExtensions.erase(extension.extensionName);
         }
 
 
-        return requireExtensions.empty();
+        return requiredExtensions.empty();
     }
 
     SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device) {
