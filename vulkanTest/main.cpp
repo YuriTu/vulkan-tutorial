@@ -6,11 +6,8 @@
 #include <vector>
 #include <cstring>
 #include <cstdlib>
-
 #include <optional>
 #include <set>
-
-
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
@@ -18,6 +15,7 @@ const uint32_t HEIGHT = 600;
 const std::vector<const char*> validationLayers = {
     "VK_LAYER_KHRONOS_validation"
 };
+
 const std::vector<const char*> deviceExtensions = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME
 };
@@ -30,9 +28,7 @@ const std::vector<const char*> deviceExtensions = {
 
 
 // ext不会自动load，所以要在这类处理
-VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger
-){
-    
+VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger) {    
     auto func = (PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
     if (func != nullptr) {
         return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
@@ -41,7 +37,7 @@ VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMes
     }
 }
 
-void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator){
+void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator) {
     auto func = (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
     if (func != nullptr) {
         func(instance, debugMessenger, pAllocator);
@@ -90,8 +86,10 @@ private:
 
     void initWindow() {
         glfwInit();
+
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+
         window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
         std::cout << "create glfw window done" << std::endl;
     }
@@ -128,11 +126,10 @@ private:
     void createInstance() {
         std::cout << "create instance start" << std::endl;
         if (enableValidationLayers && !checkValidationLayerSupport()) {
-            throw std::runtime_error("validation layers requestd, but not available!");
+            throw std::runtime_error("validation layers requested, but not available!");
         }
 
         std::cout << "create instance doing 1" << std::endl;
-
         VkApplicationInfo appInfo{};
         appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
         appInfo.pApplicationName = "Hello Triangle";
@@ -163,7 +160,7 @@ private:
             createInfo.pNext = nullptr;
         }
         
-
+        // 列举目前可用的 extension 不影响逻辑
         uint32_t extensionCount = 0;
         vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
         std::vector<VkExtensionProperties> vkExtensions(extensionCount);
@@ -172,7 +169,7 @@ private:
         for (const auto& extension : vkExtensions) {
             std::cout << '\t' << extension.extensionName << '\n';
         }
-        
+    
 
         if (vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS) {
             throw std::runtime_error("failed to create instance!");
@@ -180,7 +177,7 @@ private:
         std::cout << "create instance done" << std::endl;
     }
 
-    void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo){
+    void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo) {
         createInfo = {};
         createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
         // 消息级别
@@ -192,12 +189,13 @@ private:
 
     void setupDebugMessenger() {
         if (!enableValidationLayers) return;
-        VkDebugUtilsMessengerCreateInfoEXT createInfo {};
+
+        VkDebugUtilsMessengerCreateInfoEXT createInfo;
 
         populateDebugMessengerCreateInfo(createInfo);
 
-        if (CreateDebugUtilsMessengerEXT(instance, &createInfo, nullptr, &debugMessenger)) {
-            throw std::runtime_error("failed set up debug messenger");
+        if (CreateDebugUtilsMessengerEXT(instance, &createInfo, nullptr, &debugMessenger) != VK_SUCCESS) {
+            throw std::runtime_error("failed to set up debug messenger!");
         }
     }
    
@@ -228,22 +226,7 @@ private:
         }
         return true;
     }
-    //VKAPI_ATTR  c 的预处理器 preprocesser 用来给不同的编辑器做提示的 spec：https://registry.khronos.org/vulkan/specs/1.0-extensions/html/vkspec.html#boilerplate-platform-specific-calling-conventions
-    static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
-        VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-        VkDebugUtilsMessageTypeFlagsEXT messageType,
-        const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
-        void* pUserData
-    ) {
-        std::cerr << "Validation layer:" << pCallbackData->pMessage << std::endl;
-
-        if (messageType >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
-
-        }
-
-        // 行为是否应该被中断
-        return VK_FALSE;
-    }
+    
 
 
     // 根据是否启用validation 返回需要的extension列表
@@ -323,6 +306,7 @@ private:
         
         createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
         createInfo.pQueueCreateInfos = queueCreateInfos.data();
+
         createInfo.pEnabledFeatures = &deviceFeatures;
 
         createInfo.enabledExtensionCount = 0;
@@ -357,16 +341,17 @@ private:
 
         // queueFamily 部分
         QueueFamilyIndices indices = findQueueFamilies(device);
-        // swap chain KHR插件可用性
-        bool extensionSupported = checkExtensionSupport(device);
-        // swap chain 功能可用性
-        bool swapChainAdequate = false;
-        if (extensionSupported) {
-            SwapChainSupportDetails swapChainSupport = querySwapChainSupport(device);
-            swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
-        }
+        // // swap chain KHR插件可用性
+        // bool extensionSupported = checkExtensionSupport(device);
+        // // swap chain 功能可用性
+        // bool swapChainAdequate = false;
+        // if (extensionSupported) {
+        //     SwapChainSupportDetails swapChainSupport = querySwapChainSupport(device);
+        //     swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
+        // }
 
-        return indices.isComplete() && extensionSupported && swapChainAdequate;
+        // return indices.isComplete() && extensionSupported && swapChainAdequate;
+        return indices.isComplete();
     }
     // 问题可能不在这里，index选出来都是0
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
@@ -374,23 +359,22 @@ private:
 
         uint32_t queueFamilyCount = 0;
         vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
-        std::vector<VkQueueFamilyProperties> queueFamilies (queueFamilyCount);
+
+        std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
         vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
 
-        VkBool32 presentSupport = false;
         int i = 0;
         for (const auto& queueFamily : queueFamilies) {
             // flag 表示这个family中的queue的能力 是支持graphics指令的
             // 注意这里是& 不是== flags包含很多功能
             if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-                std::cout << "graph index" << i << std::endl;
                 indices.graphicsFamily = i;
             }
             // 这里判断queue能力是否支持surface能力 queue的能力是特定的
+            VkBool32 presentSupport = false;
             vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
 
             if (presentSupport) {
-                std::cout << "present index" << i << std::endl;
                 indices.presentFamily = i;
             }
 
@@ -447,12 +431,23 @@ private:
 
         return details;
     }
-
     
+    //VKAPI_ATTR  c 的预处理器 preprocesser 用来给不同的编辑器做提示的 spec：https://registry.khronos.org/vulkan/specs/1.0-extensions/html/vkspec.html#boilerplate-platform-specific-calling-conventions
+    static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
+        VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+        VkDebugUtilsMessageTypeFlagsEXT messageType,
+        const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+        void* pUserData
+    ) {
+        std::cerr << "Validation layer:" << pCallbackData->pMessage << std::endl;
 
-    
+        // if (messageType >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
 
-    
+        // }
+
+        // 行为是否应该被中断
+        return VK_FALSE;
+    }
 };
 
 int main() {
@@ -460,8 +455,7 @@ int main() {
 
     try {
         app.run();
-    }
-    catch (const std::exception& e) {
+    } catch (const std::exception& e) {
         std::cerr << e.what() << std::endl;
         return EXIT_FAILURE;
     }
