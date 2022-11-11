@@ -91,6 +91,7 @@ private:
 
     VkSwapchainKHR swapChain;
 
+
     void initWindow() {
         glfwInit();
 
@@ -117,8 +118,9 @@ private:
     }
 
     void cleanup() {
-        vkDestroyDevice(device, nullptr);
         vkDestroySwapchainKHR(device, swapChain, nullptr);
+        vkDestroyDevice(device, nullptr);
+        
 
         if (enableValidationLayers) {
             DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
@@ -322,7 +324,8 @@ private:
 
         createInfo.pEnabledFeatures = &deviceFeatures;
 
-        createInfo.enabledExtensionCount = 0;
+        createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
+        createInfo.ppEnabledExtensionNames = deviceExtensions.data();
 
         if (enableValidationLayers) {
             createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
@@ -340,32 +343,65 @@ private:
         vkGetDeviceQueue(device, indices.presentFamily.value(), 0, &presentQueue);
         
     }
-    
-    bool isDeviceSuitable(VkPhysicalDevice device) {
+    void createSwapChain() {
+        SwapChainSupportDetails swapChainSupport = querySwapChainSupport(physicalDevice);
 
-        // // 主要是硬件的属性 api版本驱动版本
-        // VkPhysicalDeviceProperties deviceProperties;
-        // vkGetPhysicalDeviceProperties(device, &deviceProperties);
-        // // 主要是shader特性 支持depth、shader float一类的
-        // VkPhysicalDeviceFeatures deviceFeatures;
-        // vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
-        // return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && deviceFeatures.geometryShader;
+        VkSurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(swapChainSupport.formats);
+        VkPresentModeKHR presentMode = chooseSwapPresentMode(swapChainSupport.presentModes);
+        VkExtent2D extent = chooseSwapExtent(swapChainSupport.capabilities);
 
-
-        // queueFamily 部分
-        QueueFamilyIndices indices = findQueueFamilies(device);
-        // // swap chain KHR插件可用性
-        bool extensionSupported = checkDeviceExtensionSupport(device);
-        // // swap chain 功能可用性
-        bool swapChainAdequate = false;
-        if (extensionSupported) {
-            SwapChainSupportDetails swapChainSupport = querySwapChainSupport(device);
-            swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
+        // 多提供一个图像，用于实现三倍缓冲
+        uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1; 
+        // 0 表示没有最大值，所以在有max的情况下，要避免+1超了
+        if (swapChainSupport.capabilities.maxImageCount > 0 && imageCount > swapChainSupport.capabilities.maxImageCount) {
+            imageCount = swapChainSupport.capabilities.maxImageCount;
         }
 
-        return indices.isComplete() && extensionSupported && swapChainAdequate;
-        
+        VkSwapchainCreateInfoKHR createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+        createInfo.surface = surface;
+
+        createInfo.minImageCount = imageCount;
+        createInfo.imageFormat = surfaceFormat.format;
+        createInfo.imageColorSpace = surfaceFormat.colorSpace;
+        createInfo.imageExtent = extent;
+        // 图像包含的图像views情况 非VR得情况为1
+        createInfo.imageArrayLayers = 1;
+        // 表示这个swapchain中的图像可以用于framebuffer中的 color attachment 如果是其他传输用途可以用 VK_IMAGE_USAGE_TRANSFER_DST_BIT 
+        createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+        // 处理多个queue families中如何使用swap images的问题
+        QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
+        uint32_t queueFamilyIndices[] = {indices.graphicsFamily.value(), indices.presentFamily.value()};
+
+        if (indices.graphicsFamily != indices.presentFamily) {
+            // 共享
+            createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+            createInfo.queueFamilyIndexCount = 2;
+            createInfo.pQueueFamilyIndices = queueFamilyIndices;
+        } else {
+            // 不共享 排他模式 
+            createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+            createInfo.queueFamilyIndexCount = 0;
+            createInfo.pQueueFamilyIndices = nullptr;
+            
+        }
+        // 预设的某种变换方式，例如某个图像需要默认渲染90°
+        createInfo.preTransform = swapChainSupport.capabilities.currentTransform;
+        // 是否需要进行alpha混合
+        createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+        createInfo.presentMode= presentMode;
+        // 前向剪裁
+        createInfo.clipped = VK_TRUE;
+        createInfo.oldSwapchain = VK_NULL_HANDLE;
+
+        if(vkCreateSwapchainKHR(device, &createInfo, nullptr, &swapChain) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create swap chain!");
+        }        
+
     }
+    
+    
     // 问题可能不在这里，index选出来都是0
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
         QueueFamilyIndices indices;
@@ -401,6 +437,26 @@ private:
         return indices;
     }
 
+// 类似于设置capabilities 主要处理分辨率的事情 currentExtent表示目前适合的分辨率
+// 如果是glfw会有视网膜屏的问题
+VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities) {
+    if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
+        return capabilities.currentExtent;
+    } else {
+        int width, height;
+        glfwGetFramebufferSize(window, &width, &height);
+
+        VkExtent2D actualExtent = {
+            static_cast<uint32_t>(width),
+            static_cast<uint32_t>(height)
+        };
+
+        actualExtent.width = std::clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
+        actualExtent.height = std::clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
+
+        return actualExtent;
+    }
+}
     
     
     bool checkDeviceExtensionSupport(VkPhysicalDevice device){
@@ -429,7 +485,7 @@ private:
         uint32_t formatCount;
         vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, nullptr);
 
-        if (formatCount != 0 ) {
+        if (formatCount != 0) {
             details.formats.resize(formatCount);
             vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, details.formats.data());
         }
@@ -438,12 +494,35 @@ private:
         uint32_t presentModeCount;
         vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, nullptr);
 
-        if (presentModeCount != 0){
+        if (presentModeCount != 0) {
             details.presentModes.resize(presentModeCount);
             vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, details.presentModes.data());
         }
 
         return details;
+    }
+
+    bool isDeviceSuitable(VkPhysicalDevice device) {
+        // queueFamily 部分
+        QueueFamilyIndices indices = findQueueFamilies(device);
+        // // swap chain KHR插件可用性
+        bool extensionsSupported = checkDeviceExtensionSupport(device);
+        // // swap chain 功能可用性
+        bool swapChainAdequate = false;
+        if (extensionsSupported) {
+            SwapChainSupportDetails swapChainSupport = querySwapChainSupport(device);
+            swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
+        }
+
+        return indices.isComplete() && extensionsSupported && swapChainAdequate;
+        
+        // // 主要是硬件的属性 api版本驱动版本
+        // VkPhysicalDeviceProperties deviceProperties;
+        // vkGetPhysicalDeviceProperties(device, &deviceProperties);
+        // // 主要是shader特性 支持depth、shader float一类的
+        // VkPhysicalDeviceFeatures deviceFeatures;
+        // vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+        // return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && deviceFeatures.geometryShader;
     }
 
     VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats) {
@@ -466,84 +545,9 @@ VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& avai
 
     return VK_PRESENT_MODE_FIFO_KHR;
 }
-// 类似于设置capabilities 主要处理分辨率的事情 currentExtent表示目前适合的分辨率
-// 如果是glfw会有视网膜屏的问题
-VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities) {
-    if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
-        return capabilities.currentExtent;
-    } else {
-        int width, height;
-        glfwGetFramebufferSize(window, &width, &height);
 
-        VkExtent2D actualExtent = {
-            static_cast<uint32_t>(width),
-            static_cast<uint32_t>(height)
-        };
 
-        actualExtent.width = std::clamp(actualExtent.width, capabilities.minImageCount.width, capabilities.maxImageExtent.width);
-        actualExtent.height = std::clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
-
-        return actualExtent;
-    }
-}
-
-    void createSwapChain() {
-        SwapChainSupportDetails SwapChainSupport = querySwapChainSupport(physicalDevice);
-
-        VkSurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(SwapChainSupport.formats);
-        VkPresentModeKHR presentMode = chooseSwapPresentMode(SwapChainSupport.presentModes);
-        VkExtent2D extent = chooseSwapExtent(SwapChainSupport.capabilities);
-
-        // 多提供一个图像，用于实现三倍缓冲
-        uint32_t imageCount = SwapChainSupport.capabilities.minImageCount + 1; 
-        // 0 表示没有最大值，所以在有max的情况下，要避免+1超了
-        if (SwapChainSupport.capabilities.maxImageCount > 0 && imageCount > SwapChainSupport.capabilities.maxImageCount) {
-            imageCount = SwapChainSupport.capabilities.maxImageCount;
-        }
-
-        VkSwapchainCreateInfoKHR createInfo{};
-        createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-        createInfo.surface = surface;
-
-        createInfo.minImageCount = imageCount;
-        createInfo.imageFormat = surfaceFormat.format;
-        createInfo.imageColorSpace = surfaceFormat.colorSpace;
-        createInfo.imageExtent = extent;
-        // 图像包含的图像views情况 非VR得情况为1
-        createInfo.imageArrayLayers = 1;
-        // 表示这个swapchain中的图像可以用于framebuffer中的 color attachment 如果是其他传输用途可以用 VK_IMAGE_USAGE_TRANSFER_DST_BIT 
-        createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-
-        // 处理多个queue families中如何使用swap images的问题
-        QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
-        uint32_t queueFamilyIndices[] = {indices.graphicsFamily.value(), indices.presentFamily.value()};
-
-        if (indices.graphicsFamily != indices.presentFamily) {
-            // 共享
-            createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-            createInfo.queueFamilyIndexCount = 2;
-            createInfo.pQueueFamilyIndices = queueFamilyIndices;
-        } else {
-            // 不共享 排他模式 
-            createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-            createInfo.queueFamilyIndexCount = 0;
-            createInfo.pQueueFamilyIndices = nullptr;
-            
-        }
-        // 预设的某种变换方式，例如某个图像需要默认渲染90°
-        createInfo.preTransform = SwapChainSupport.capabilities.currentTransform;
-        // 是否需要进行alpha混合
-        createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-        createInfo.presentMode= presentMode;
-        // 前向剪裁
-        createInfo.clipped = VK_TRUE;
-        createInfo.oldSwapchain = VK_NULL_HANDLE;
-
-        if(vkCreateSwapchainKHR(device, &createInfo, nullptr, &swapChain) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create swap chain!");
-        }        
-
-    }
+    
     
     //VKAPI_ATTR  c 的预处理器 preprocesser 用来给不同的编辑器做提示的 spec：https://registry.khronos.org/vulkan/specs/1.0-extensions/html/vkspec.html#boilerplate-platform-specific-calling-conventions
     static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
