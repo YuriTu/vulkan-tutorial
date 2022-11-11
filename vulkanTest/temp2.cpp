@@ -3,14 +3,15 @@
 
 #include <iostream>
 #include <stdexcept>
-#include <algorithm>
 #include <vector>
 #include <cstring>
 #include <cstdlib>
-#include <cstdint>
-#include <limits>
 #include <optional>
 #include <set>
+#include <cstdint> // uint32_t
+#include <limits>
+#include <algorithm>
+
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
@@ -471,7 +472,6 @@ private:
                 return false;
             }
         }
-
         return true;
     }
 
