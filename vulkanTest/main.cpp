@@ -440,7 +440,92 @@ private:
         fragShaderStageInfo.pName = "main";
 
         VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
+        
+
         // pipeline 部分
+        
+        // 有些pipeline state可以不用recreat 就可以更新  可以在drawing的时候在制定
+        std::vector<VkDynamicState> dynamicStates = {
+            VK_DYNAMIC_STATE_VIEWPORT,
+            VK_DYNAMIC_STATE_SCISSOR
+        };
+        VkPipelineDynamicStateCreateInfo dynamicState{};
+        dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+        dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
+        dynamicState.pDynamicStates = dynamicStates.data();
+
+        // vertext data attr等 怎么给vertex shader 
+        VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+        vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+        // 规定点是按照per-vertext 还是 per-instance 的方式进行组织
+        vertexInputInfo.vertexBindingDescriptionCount = 0;
+        vertexInputInfo.pVertexBindingDescriptions = nullptr;
+        // attr变量
+        vertexInputInfo.vertexAttributeDescriptionCount = 0;
+        vertexInputInfo.pVertexAttributeDescriptions = nullptr;
+
+        // 定义图元装配流程 
+        VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+        inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+        // 拓扑结构
+        inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+        // 定点重用 和 _strip结构组合使用
+        inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+        // viewport 
+        // 指定从normalize device coordinate 到window coordinate 的仿射变换
+        // todo extent vs view vs scissor 的对比  这两可能是不同的，
+        // swapchain 用作framebuffer framebuffer不一定就是输出结果
+        // scissor 类似于光栅化的视锥裁剪，超出的区域不做处理
+        VkViewport viewport{};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
+        viewport.width = (float) swapChainExtent.width;
+        viewport.height = (float) swapChainExtent.height;
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+        
+        VkRect2D scissor{};
+        scissor.offset = {0, 0};
+        scissor.extent = swapChainExtent;
+
+        VkPipelineViewportStateCreateInfo viewportState{};
+        viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+        viewportState.viewportCount = 1;
+        viewportState.scissorCount = 1;
+        // 如果用动态设置，这里就不用了 
+        // 如果启动多个port 可以通过开启gpu特性使用
+        viewportState.pViewports = &viewport;
+        viewportState.pScissors = &scissor;
+
+        // rasterizer = {depth test, face culling, scissor test, rendering mode （eg仅处理描边）}
+        VkPipelineRasterizationStateCreateInfo rasterizer{};
+        rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+        // 超过depth范围的数据 丢弃还是clamp到近远面上
+        rasterizer.depthClampEnable = VK_FALSE;
+        // 是否抛弃几何图元 不知道有啥用
+        rasterizer.rasterizerDiscardEnable = VK_FALSE;
+        // 是否需要只绘制边框还是填充、点云
+        rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+        // 大线宽需要启动gpu特性
+        rasterizer.lineWidth = 1.0f;
+        // 前向还是后项渲染： 背面三角被抛弃
+        rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+        // 多边形朝向判断方式：顺时针
+        rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+        // 多边形偏移 shadowmap会用
+        rasterizer.depthBiasEnable = VK_FALSE;
+        rasterizer.depthBiasConstantFactor = 0.0f;
+        rasterizer.depthBiasClamp = 0.0f;
+        rasterizer.depthBiasSlopeFactor = 0.0f;
+
+        
+
+
+
+
+
+
 
 
     }
