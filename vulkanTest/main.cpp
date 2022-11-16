@@ -11,6 +11,7 @@
 #include <cstdint> // uint32_t
 #include <limits>
 #include <algorithm>
+#include <fstream>
 
 
 const uint32_t WIDTH = 800;
@@ -62,7 +63,6 @@ struct SwapChainSupportDetails {
     VkSurfaceCapabilitiesKHR capabilities;
     std::vector<VkSurfaceFormatKHR> formats;
     std::vector<VkPresentModeKHR> presentModes;
-
 };
 
 class HelloTriangleApplication {
@@ -414,6 +414,48 @@ private:
     }
 
     void createGraphicsPipeline() {
+        // shader mode 创建部分
+        auto vertShaderCode = readFile("shaders/vert.spv");
+        auto fragShaderCode = readFile("shader/frag.spv");
+        std::cout << "code size" << vertShaderCode.size() << std::endl;
+
+        // pipleine 创建完成之前 spirv的字节码并不会被调用，所以局部变量就行
+        VkShaderModule vertShaderMode = createShaderModule(vertShaderCode);
+        VkShaderModule fragshaderMode = createShaderModule(fragShaderCode);
+
+        // 类似于shader link 把code 配置到对应的pipeline
+        VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
+        vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+        vertShaderStageInfo.module = vertShaderMode;
+        // 调用入口，所以可以把所有的shader写在一个地方，通过name来管理
+        vertShaderStageInfo.pName = "main";
+        // shader 常量 通过常量配置同一份代码不同的shader功能，这比if要性能好
+        vertShaderStageInfo.pSpecializationInfo = nullptr;
+
+        VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
+        fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+        fragShaderStageInfo.module = fragshaderMode;
+        fragShaderStageInfo.pName = "main";
+
+        VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
+        // pipeline 部分
+
+
+    }
+
+    VkShaderModule createShaderModule(const std::vector<char>& code) {
+        VkShaderModuleCreateInfo createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        createInfo.codeSize = code.size();
+        // 要求的类型为int32 code.data 是char 所以要转换指针 
+        createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
+
+        VkShaderModule shaderModule;
+        if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule)) {
+            throw std::runtime_error("failed to create shader module!");
+        }
 
     }
 
@@ -625,6 +667,23 @@ private:
 
         // 行为是否应该被中断
         return VK_FALSE;
+    }
+
+    static std::vector<char> readFile(const std::string& filename) {
+        std::ifstream file(filename, std::ios::ate | std::ios::binary);
+
+        if (!file.is_open()) {
+            throw std::runtime_error("failed to open file!");
+        }
+
+        size_t fileSize = (size_t) file.tellg();
+        std::vector<char> buffer(fileSize);
+
+        file.seekg(0);
+        file.read(buffer.data(), fileSize);
+        file.close();
+
+        return buffer;
     }
 };
 
