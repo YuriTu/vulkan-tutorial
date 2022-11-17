@@ -418,7 +418,7 @@ private:
 
     void createGraphicsPipeline() {
         // shader mode 创建部分
-        auto vertShaderCode = readFile("shaders/vert.spv");
+        auto vertShaderCode = readFile("shader/vert.spv");
         auto fragShaderCode = readFile("shader/frag.spv");
         std::cout << "code size" << vertShaderCode.size() << std::endl;
 
@@ -557,11 +557,12 @@ private:
         pipelineLayoutInfo.setLayoutCount = 0;
         pipelineLayoutInfo.pSetLayouts = nullptr;
         pipelineLayoutInfo.pushConstantRangeCount = 0;
-        pipelineLayoutInfo.pushConstantRangeCount = nullptr;
+        pipelineLayoutInfo.pPushConstantRanges = nullptr;
 
         if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
             throw std::runtime_error("failed to create pipeline layout!");
         }
+        std::cout << "pipe line done" << std::endl;
 
     }
 
