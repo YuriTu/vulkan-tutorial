@@ -94,6 +94,7 @@ private:
     VkExtent2D swapChainExtent;
 
     std::vector<VkImageView> swapChainImageViews;
+    VkPipelineLayout pipelineLayout;
 
     void initWindow() {
         glfwInit();
@@ -123,6 +124,8 @@ private:
     }
 
     void cleanup() {
+        vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+
         for (auto imageView : swapChainImageViews) {
             vkDestroyImageView(device, imageView, nullptr);
         }
@@ -519,14 +522,46 @@ private:
         rasterizer.depthBiasClamp = 0.0f;
         rasterizer.depthBiasSlopeFactor = 0.0f;
 
+        VkPipelineMultisampleStateCreateInfo multisampling{};
+        multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+        multisampling.sampleShadingEnable = VK_FALSE;
+        multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+        // color blending fragment结果与framebuffer中的结果进行混合 两种方案
+        // 处理 pre attached framebuffer  
+        // warning：对象与对象的沟通靠attachment 对象和上下文的沟通是binding 
+        // 类似于TAA的颜色插值
+        VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+        // 实际起作用的通道（例如可以只插值alpha（alpha blending），rgb不处理）
+        colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+        colorBlendAttachment.blendEnable = VK_FALSE;
+        // 插值权重
+        colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
+        colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
+        // 插值操作
+        colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD; // Optional
+        colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
+        colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
+        colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD; // Optional
         
+        VkPipelineColorBlendStateCreateInfo colorBlending{};
+        colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+        // 是否开启 bitwise combination 进行color blending
+        colorBlending.logicOpEnable = VK_FALSE;
+        colorBlending.attachmentCount = 1;
+        colorBlending.pAttachments = &colorBlendAttachment;
 
+        // uniform 变量确定 pipeline layout
+        VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+        pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        pipelineLayoutInfo.setLayoutCount = 0;
+        pipelineLayoutInfo.pSetLayouts = nullptr;
+        pipelineLayoutInfo.pushConstantRangeCount = 0;
+        pipelineLayoutInfo.pushConstantRangeCount = nullptr;
 
-
-
-
-
-
+        if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create pipeline layout!");
+        }
 
     }
 
