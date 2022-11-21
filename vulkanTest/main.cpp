@@ -96,6 +96,7 @@ private:
     std::vector<VkImageView> swapChainImageViews;
     VkRenderPass renderPass;
     VkPipelineLayout pipelineLayout;
+    VkPipeline graphicsPipeline;
 
     void initWindow() {
         glfwInit();
@@ -126,6 +127,7 @@ private:
     }
 
     void cleanup() {
+        vkDestroyPipeline(device, graphicsPipeline, nullptr);
         vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
         vkDestroyRenderPass(device, renderPass, nullptr);
 
@@ -605,14 +607,44 @@ private:
         if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
             throw std::runtime_error("failed to create pipeline layout!");
         }
+        
+
+        // 一个完整的pipeline由三个部分组成
+        // 1. shader stage： 可编程部分
+        // 2. fix-function 固定配置 
+        // 3. attach referenced 资源引用与layout
+        VkGraphicsPipelineCreateInfo pipelineInfo{};
+        pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+        //shader stage 下面的array有几个
+        pipelineInfo.stageCount = 2;
+        pipelineInfo.pStages = shaderStages;
+        // fix function
+        pipelineInfo.pVertexInputState = &vertexInputInfo;
+        pipelineInfo.pInputAssemblyState = &inputAssembly;
+        pipelineInfo.pViewportState = &viewportState;
+        pipelineInfo.pRasterizationState = &rasterizer;
+        pipelineInfo.pMultisampleState = &multisampling;
+        pipelineInfo.pDepthStencilState = nullptr;
+        pipelineInfo.pColorBlendState = &colorBlending;
+        pipelineInfo.pDynamicState = &dynamicState;
+        // layout:pipeline对于location uniform数据的描述符
+        pipelineInfo.layout = pipelineLayout;
+        pipelineInfo.renderPass = renderPass;
+        pipelineInfo.subpass = 0;
+        
+        // 引用其他render 、sub pass的资源 类似继承的感觉
+        pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+        pipelineInfo.basePipelineIndex = -1;
+        // 可以一次创建多个pipeline 
+        // pipeline cache 是一种多次create 的优化手段
+        if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create graphics pipeline!");
+        }
+
         std::cout << "pipe line done" << std::endl;
 
         vkDestroyShaderModule(device, fragShaderModule, nullptr);
         vkDestroyShaderModule(device, vertShaderModule, nullptr);
-
-        VkGraphicsPipelineCreateInfo pipelineInfo{};
-        pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-        
     }
 
     VkShaderModule createShaderModule(const std::vector<char>& code) {
