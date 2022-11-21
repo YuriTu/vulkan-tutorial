@@ -94,6 +94,7 @@ private:
     VkExtent2D swapChainExtent;
 
     std::vector<VkImageView> swapChainImageViews;
+    VkRenderPass renderPass;
     VkPipelineLayout pipelineLayout;
 
     void initWindow() {
@@ -114,6 +115,7 @@ private:
         createLogicalDevice();
         createSwapChain();
         createImageViews();
+        createRenderPass();
         createGraphicsPipeline();
     }
 
@@ -125,6 +127,7 @@ private:
 
     void cleanup() {
         vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+        vkDestroyRenderPass(device, renderPass, nullptr);
 
         for (auto imageView : swapChainImageViews) {
             vkDestroyImageView(device, imageView, nullptr);
@@ -410,6 +413,50 @@ private:
         }
     }
 
+    void createRenderPass() {
+        VkAttachmentDescription colorAttachment{};
+        colorAttachment.format = swapChainImageFormat;
+        // 没有multisampling所以是1
+        colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+        // color 或者 depth 第一次使用时， clear一下还是保留以前的
+        colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        // 最后一次使用时 framebuffer的内容处理掉还是放内存
+        colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        // 模板测试，类似做蒙版效果用 用于剔除某个颜色
+        colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        // vkimage的作用 color attach、swapchain、framebuffer
+        colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        // render pass接受后，放到swap chain中准备渲染
+        colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+        VkAttachmentReference colorAttachmentRef{};
+        colorAttachmentRef.attachment = 0;
+        colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        // 一个render pass 由多个subpass组成，subpass依赖之前的pass的产物 就像一层层的后处理一样
+        // subpass不一定是渲染流程，也可能是计算流程
+
+        VkSubpassDescription subpass{};
+        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        // 这里的index会被fragment中使用
+        subpass.colorAttachmentCount = 1;
+        // 把attach当做colorbuffer使用
+        subpass.pColorAttachments = &colorAttachmentRef;
+
+        // renderpass 会依赖多个subpass和attachment
+        VkRenderPassCreateInfo renderPassInfo{};
+        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+        renderPassInfo.attachmentCount = 1;
+        renderPassInfo.pAttachments = &colorAttachment;
+        renderPassInfo.subpassCount = 1;
+        renderPassInfo.pSubpasses = &subpass;
+
+        if (vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create render pass!");
+        }
+
+    }
+
     void createGraphicsPipeline() {
         // shader mode 创建部分
         auto vertShaderCode = readFile("shaders/vert.spv");
@@ -562,6 +609,10 @@ private:
 
         vkDestroyShaderModule(device, fragShaderModule, nullptr);
         vkDestroyShaderModule(device, vertShaderModule, nullptr);
+
+        VkGraphicsPipelineCreateInfo pipelineInfo{};
+        pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+        
     }
 
     VkShaderModule createShaderModule(const std::vector<char>& code) {
