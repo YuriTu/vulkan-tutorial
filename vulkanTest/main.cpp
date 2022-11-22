@@ -138,7 +138,7 @@ private:
             glfwPollEvents();
             drawFrame();
         }
-        // vkDeviceWaitIdle(device);
+        vkDeviceWaitIdle(device);
     }
 
     void cleanup() {
@@ -551,24 +551,7 @@ private:
         inputAssembly.primitiveRestartEnable = VK_FALSE;
 
         // viewport 
-        // 指定从normalize device coordinate 到window coordinate 的仿射变换
-        // todo extent vs view vs scissor 的对比  这两可能是不同的，
-        // swapchain 用作framebuffer framebuffer不一定就是输出结果
-        // scissor 类似于光栅化的视锥裁剪，超出的区域不做处理
-        VkViewport viewport{};
-        viewport.x = 0.0f;
-        viewport.y = 0.0f;
-        viewport.width = static_cast<float>(swapChainExtent.width);
-        viewport.height = static_cast<float>(swapChainExtent.height);
-        viewport.minDepth = 0.0f;
-        viewport.maxDepth = 1.0f;
-        // 在commandbuffer中设置
-        vkCmdSetViewport(commandBuffer, 0,1, &viewport);
         
-        VkRect2D scissor{};
-        scissor.offset = {0, 0};
-        scissor.extent = swapChainExtent;
-        vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
         VkPipelineViewportStateCreateInfo viewportState{};
         viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -576,8 +559,8 @@ private:
         viewportState.scissorCount = 1;
         // 如果用动态设置，这里就不用了 
         // 如果启动多个port 可以通过开启gpu特性使用
-        viewportState.pViewports = &viewport;
-        viewportState.pScissors = &scissor;
+        // viewportState.pViewports = &viewport;
+        // viewportState.pScissors = &scissor;
 
         // rasterizer = {depth test, face culling, scissor test, rendering mode （eg仅处理描边）}
         VkPipelineRasterizationStateCreateInfo rasterizer{};
@@ -771,12 +754,33 @@ private:
         // 所有提交command的func都有vkcmd的前缀  表示在primary还是secondary缓冲区中处理
         vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-        // 绘制命令
-        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
-        // instance rendering
-        vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+            // 绘制命令
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+
+            // 指定从normalize device coordinate 到window coordinate 的仿射变换
+            // todo extent vs view vs scissor 的对比  这两可能是不同的，
+            // swapchain 用作framebuffer framebuffer不一定就是输出结果
+            // scissor 类似于光栅化的视锥裁剪，超出的区域不做处理
+            VkViewport viewport{};
+            viewport.x = 0.0f;
+            viewport.y = 0.0f;
+            viewport.width = static_cast<float>(swapChainExtent.width);
+            viewport.height = static_cast<float>(swapChainExtent.height);
+            viewport.minDepth = 0.0f;
+            viewport.maxDepth = 1.0f;
+            // 在commandbuffer中设置
+            vkCmdSetViewport(commandBuffer, 0,1, &viewport);
+            
+            VkRect2D scissor{};
+            scissor.offset = {0, 0};
+            scissor.extent = swapChainExtent;
+            vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+            // instance rendering
+            vkCmdDraw(commandBuffer, 3, 1, 0, 0);
 
         vkCmdEndRenderPass(commandBuffer);
+
         if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
             throw std::runtime_error("failed to record command buffer!");
         }
