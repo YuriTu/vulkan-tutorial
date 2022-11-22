@@ -138,7 +138,7 @@ private:
             glfwPollEvents();
             drawFrame();
         }
-        vkDeviceWaitIdle(device);
+        // vkDeviceWaitIdle(device);
     }
 
     void cleanup() {
@@ -484,7 +484,10 @@ private:
         // 第一个subpass 
         dependency.dstSubpass = 0;
         dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        dependency.srcAccessMask = 0; 
+        dependency.srcAccessMask = 0;
+
+        dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT; 
 
         renderPassInfo.dependencyCount = 1;
         renderPassInfo.pDependencies = &dependency;
@@ -555,8 +558,8 @@ private:
         VkViewport viewport{};
         viewport.x = 0.0f;
         viewport.y = 0.0f;
-        viewport.width = (float) swapChainExtent.width;
-        viewport.height = (float) swapChainExtent.height;
+        viewport.width = static_cast<float>(swapChainExtent.width);
+        viewport.height = static_cast<float>(swapChainExtent.height);
         viewport.minDepth = 0.0f;
         viewport.maxDepth = 1.0f;
         // 在commandbuffer中设置
@@ -813,6 +816,8 @@ private:
         if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFence) != VK_SUCCESS) {
             throw std::runtime_error("failed to submit draw command buffer!");
         }
+
+        std::cout << "queue submit done " << std::endl;
         // 开画
         VkPresentInfoKHR presentInfo{};
         presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -826,6 +831,7 @@ private:
         // 多个swapchain的时候使用
         presentInfo.pResults = nullptr;
         vkQueuePresentKHR(presentQueue, &presentInfo);
+        std::cout << "queue present done " << std::endl;
     }
 
     void createSyncObject() {
