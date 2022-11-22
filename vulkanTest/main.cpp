@@ -916,9 +916,6 @@ private:
         }
     }
     
-    
-   
-
     SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device) {
         SwapChainSupportDetails details;
         // 基本表面能力
