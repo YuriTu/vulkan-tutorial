@@ -12,6 +12,7 @@
 #include <limits>
 #include <algorithm>
 #include <fstream>
+#include <glm/glm.hpp>
 
 
 const uint32_t WIDTH = 800;
@@ -32,6 +33,41 @@ const std::vector<const char*> deviceExtensions = {
 #else 
     const bool enableValidationLayers = true;
 #endif
+
+struct Vertex
+{
+    glm::vec2 pos;
+    glm::vec3 color;
+    // 交错式的数据输入方式和gl类似 
+    static VkVertexInputBindingDescription getBindingDescription() {
+        VkVertexInputBindingDescription bindingDescription{};
+        bindingDescription.binding = 0;
+        bindingDescription.stride = sizeof(Vertex);
+        bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+        return bindingDescription;
+    }
+
+    static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions() {
+        
+        std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
+        // 说明attar去哪个bind（vertex buffer）
+        attributeDescriptions[0].binding = 0;
+        // shader里面的哪个location
+        attributeDescriptions[0].location = 0;
+        // 数据情况 vec3\2\4 ?
+        attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+        // 每个点的数据偏移量，所以是sizeof vec2
+        attributeDescriptions[0].offset = offsetof(Vertex, pos);
+
+        attributeDescriptions[1].binding = 0;
+        attributeDescriptions[1].location = 0;
+        attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+        attributeDescriptions[1].offset = offsetof(Vertex, color);
+
+        return attributeDescriptions;
+    }
+};
 
 
 // ext不会自动load，所以要在这类处理
@@ -539,12 +575,14 @@ private:
         // vertext data attr等 怎么给vertex shader 
         VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
         vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+        auto bindingDescription = Vertex::getBindingDescription();
+        auto attributeDescriptions = Vertex::getAttributeDescriptions();
         // 规定点是按照per-vertext 还是 per-instance 的方式进行组织
-        vertexInputInfo.vertexBindingDescriptionCount = 0;
-        vertexInputInfo.pVertexBindingDescriptions = nullptr;
+        vertexInputInfo.vertexBindingDescriptionCount = 1;
+        vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
         // attr变量
-        vertexInputInfo.vertexAttributeDescriptionCount = 0;
-        vertexInputInfo.pVertexAttributeDescriptions = nullptr;
+        vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+        vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
         // 定义图元装配流程 
         VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
