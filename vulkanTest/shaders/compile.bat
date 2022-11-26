@@ -1,5 +1,5 @@
-@REM D:\workspace\vulkan\vulkanSDK\Bin\glslc.exe ./shader/shader.vert -o ./shader/vert.spv
-@REM D:\workspace\vulkan\vulkanSDK\Bin\glslc.exe ./shader/shader.frag -o ./shader/frag.spv
+D:\workspace\vulkan\vulkanSDK\Bin\glslc.exe ./shaders/shader.vert -o ./shaders/vert.spv
+D:\workspace\vulkan\vulkanSDK\Bin\glslc.exe ./shaders/shader.frag -o ./shaders/frag.spv
 @REM pause
 
-D:\workspace\vulkan\vulkanSDK\Bin\glslc.exe --help
+@REM D:\workspace\vulkan\vulkanSDK\Bin\glslc.exe --help
