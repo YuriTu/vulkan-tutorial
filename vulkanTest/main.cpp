@@ -772,41 +772,110 @@ private:
         if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
             throw std::runtime_error("failed to create command pool!");
         }
+        
+    }
+    void createVertexBuffer() {
+        VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+
+        VkBuffer stagingBuffer;
+        VkDeviceMemory stagingBufferMemory;
+
+        createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
+            stagingBuffer, stagingBufferMemory);
+        // 类似bufferdata 异步的 可以加回调
+        void* data;
+        vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
+            memcpy(data, vertices.data(), (size_t)bufferSize);
+        vkUnmapMemory(device, stagingBufferMemory);
+
+        createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBuffer, vertexBufferMemory);
+        copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
+        vkDestroyBuffer(device, stagingBuffer, nullptr);
+        vkFreeMemory(device, stagingBufferMemory, nullptr);
     }
 
-    void createVertexBuffer() {
+    void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
         VkBufferCreateInfo bufferInfo{};
         bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.size = sizeof(vertices[0]) * vertices.size();
+        bufferInfo.size = size;
         // 可以指定多种用途
-        bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        bufferInfo.usage = usage;
         bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-        if (vkCreateBuffer(device, &bufferInfo, nullptr, &vertexBuffer) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create vertex buffer!");
+        if (vkCreateBuffer(device, &bufferInfo, nullptr, &buffer) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create buffer!");
         }
 
         VkMemoryRequirements memRequirements;
-        vkGetBufferMemoryRequirements(device, vertexBuffer, &memRequirements);
+        vkGetBufferMemoryRequirements(device, buffer, &memRequirements);
+
         VkMemoryAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
         allocInfo.allocationSize = memRequirements.size;
         // VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT 可以通过mapmemory提供host的访问能力
         // VK_MEMORY_PROPERTY_HOST_COHERENT_BIT cache 通过一段chache（连续内存堆）coherent memory heap 提供更新mapmem的能力
         // 类似bindbuffer中的指明buffer target的情况
-        allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties);
         
-        if (vkAllocateMemory(device, &allocInfo, nullptr, &vertexBufferMemory) != VK_SUCCESS) {
-            throw std::runtime_error("failed to allocate vertex buffer memory!");
+        if (vkAllocateMemory(device, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
+            throw std::runtime_error("failed to allocate buffer memory!");
         }
         // 类似于bindbuffer 把buffer和memory进行绑定
-        vkBindBufferMemory(device, vertexBuffer, vertexBufferMemory, 0);
-        // 类似bufferdata 异步的 可以加回调
-        void* data;
-        vkMapMemory(device, vertexBufferMemory, 0, bufferInfo.size, 0, &data);
-        memcpy(data, vertices.data(), (size_t)bufferInfo.size);
-        vkUnmapMemory(device, vertexBufferMemory);
+        vkBindBufferMemory(device, buffer, bufferMemory, 0);
 
+    }
+
+    
+
+    void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
+        VkCommandBufferAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        allocInfo.commandPool = commandPool;
+        allocInfo.commandBufferCount = 1;
+
+        VkCommandBuffer commandBuffer;
+        vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer);
+
+        VkCommandBufferBeginInfo beginInfo{};
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+        vkBeginCommandBuffer(commandBuffer, &beginInfo);
+
+            VkBufferCopy copyRegion{};
+            copyRegion.srcOffset = 0;
+            copyRegion.dstOffset = 0;
+            copyRegion.size = size;
+            vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
+
+        vkEndCommandBuffer(commandBuffer);
+
+        VkSubmitInfo submitInfo{};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submitInfo.commandBufferCount = 1;
+        submitInfo.pCommandBuffers = &commandBuffer;
+
+        vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+        vkQueueWaitIdle(graphicsQueue);
+
+        vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
+
+    }
+
+    uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
+        VkPhysicalDeviceMemoryProperties memProperties;
+        vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
+
+        for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
+            if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+                return i;
+            }
+        }
+
+        throw std::runtime_error("failed to find suitable memory type!");
     }
 
     void createCommandBuffers() {
@@ -818,7 +887,7 @@ private:
         // 可以被提交给queue 但是不能被其他buffer使用  secondary则反之
         allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
         // pool中需要分配的buffer数量
-        allocInfo.commandBufferCount = commandBuffers.size();
+        allocInfo.commandBufferCount = (uint32_t) commandBuffers.size();
 
         if (vkAllocateCommandBuffers(device, &allocInfo, commandBuffers.data()) != VK_SUCCESS) {
             throw std::runtime_error("failed to allocate command buffers!");
@@ -842,7 +911,7 @@ private:
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         renderPassInfo.renderPass = renderPass;
         renderPassInfo.framebuffer = swapChainFramebuffers[imageIndex];
-        renderPassInfo.renderArea.offset = {0,0};
+        renderPassInfo.renderArea.offset = {0, 0};
         renderPassInfo.renderArea.extent = swapChainExtent;
 
         VkClearValue clearColor = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
@@ -867,7 +936,7 @@ private:
             viewport.minDepth = 0.0f;
             viewport.maxDepth = 1.0f;
             // 在commandbuffer中设置
-            vkCmdSetViewport(commandBuffer, 0,1, &viewport);
+            vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
             
             VkRect2D scissor{};
             scissor.offset = {0, 0};
@@ -890,12 +959,14 @@ private:
 
     void drawFrame() {
         vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
-        // 用完要人工reset fences本质是控制cpu进程的手段所以需要cpu去管理
-        vkResetFences(device, 1, &inFlightFences[currentFrame]);
+
         // 从swaip chain 要一个image
         uint32_t imageIndex;
         // 输出一个available的index，可以从 swapchainimages中找到image
         vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+        
+        // 用完要人工reset fences本质是控制cpu进程的手段所以需要cpu去管理
+        vkResetFences(device, 1, &inFlightFences[currentFrame]);
         // 重置状态保证command buffer可用
         vkResetCommandBuffer(commandBuffers[currentFrame], 0);
         // 提交command 到buffer
@@ -967,18 +1038,7 @@ private:
         
     }
 
-    uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
-        VkPhysicalDeviceMemoryProperties memProperties;
-        vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
-
-        for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
-            if (typeFilter & (1 << i) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
-                return i;
-            }
-        }
-
-        throw std::runtime_error("failed to find suitable memory type!");
-    }
+    
 
     VkShaderModule createShaderModule(const std::vector<char>& code) {
         VkShaderModuleCreateInfo createInfo{};
