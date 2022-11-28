@@ -1,18 +1,20 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
+#include <glm/glm.hpp>
+
 #include <iostream>
+#include <fstream>
 #include <stdexcept>
+#include <algorithm>
 #include <vector>
 #include <cstring>
 #include <cstdlib>
-#include <optional>
-#include <set>
 #include <cstdint> // uint32_t
 #include <limits>
-#include <algorithm>
-#include <fstream>
-#include <glm/glm.hpp>
+#include <array>
+#include <optional>
+#include <set>
 
 
 const uint32_t WIDTH = 800;
@@ -33,41 +35,6 @@ const std::vector<const char*> deviceExtensions = {
 #else 
     const bool enableValidationLayers = true;
 #endif
-
-struct Vertex
-{
-    glm::vec2 pos;
-    glm::vec3 color;
-    // 交错式的数据输入方式和gl类似 
-    static VkVertexInputBindingDescription getBindingDescription() {
-        VkVertexInputBindingDescription bindingDescription{};
-        bindingDescription.binding = 0;
-        bindingDescription.stride = sizeof(Vertex);
-        bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
-        return bindingDescription;
-    }
-
-    static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions() {
-        
-        std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
-        // 说明attar去哪个bind（vertex buffer）
-        attributeDescriptions[0].binding = 0;
-        // shader里面的哪个location
-        attributeDescriptions[0].location = 0;
-        // 数据情况 vec3\2\4 ?
-        attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
-        // 每个点的数据偏移量，所以是sizeof vec2
-        attributeDescriptions[0].offset = offsetof(Vertex, pos);
-
-        attributeDescriptions[1].binding = 0;
-        attributeDescriptions[1].location = 0;
-        attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[1].offset = offsetof(Vertex, color);
-
-        return attributeDescriptions;
-    }
-};
 
 
 // ext不会自动load，所以要在这类处理
@@ -102,6 +69,49 @@ struct SwapChainSupportDetails {
     std::vector<VkSurfaceFormatKHR> formats;
     std::vector<VkPresentModeKHR> presentModes;
 };
+
+struct Vertex {
+    glm::vec2 pos;
+    glm::vec3 color;
+    // 交错式的数据输入方式和gl类似 
+    static VkVertexInputBindingDescription getBindingDescription() {
+        VkVertexInputBindingDescription bindingDescription{};
+        bindingDescription.binding = 0;
+        bindingDescription.stride = sizeof(Vertex);
+        bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+        return bindingDescription;
+    }
+    static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions() {
+        
+        std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
+        // 说明attar去哪个bind（vertex buffer）
+        attributeDescriptions[0].binding = 0;
+        // shader里面的哪个location
+        attributeDescriptions[0].location = 0;
+        // 数据情况 vec3\2\4 ?
+        attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+        // 每个点的数据偏移量，所以是sizeof vec2
+        attributeDescriptions[0].offset = offsetof(Vertex, pos);
+
+        attributeDescriptions[1].binding = 0;
+        attributeDescriptions[1].location = 1;
+        attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+        attributeDescriptions[1].offset = offsetof(Vertex, color);
+
+        return attributeDescriptions;
+    }
+};
+
+const std::vector<Vertex> vertices = {
+    {{-1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}},
+    {{1.0f, 1.0f}, {0.0f, 1.0f, 0.0f}},
+    {{-1.0f, 1.0f}, {0.0f, 0.0f, 1.0f}},
+    {{-1.0f, -1.0f}, {0.0f, 0.0f, 1.0f}},
+    {{1.0f, -1.0f}, {0.0f, 0.0f, 1.0f}},
+    {{1.0f, 1.0f}, {0.0f, 0.0f, 1.0f}}
+};
+
 
 class HelloTriangleApplication {
 public:
@@ -145,7 +155,12 @@ private:
     std::vector<VkSemaphore> renderFinishedSemaphores;
     std::vector<VkFence> inFlightFences;
 
+    VkBuffer vertexBuffer;
+    VkDeviceMemory vertexBufferMemory;
+
     uint32_t currentFrame = 0;
+
+    
 
     void initWindow() {
         glfwInit();
@@ -169,6 +184,7 @@ private:
         createGraphicsPipeline();
         createFramebuffer();
         createCommandPool();
+        createVertexBuffer();
         createCommandBuffers();
         createSyncObjects();
     }
@@ -202,6 +218,10 @@ private:
         }
 
         vkDestroySwapchainKHR(device, swapChain, nullptr);
+
+        vkDestroyBuffer(device, vertexBuffer, nullptr);
+        vkFreeMemory(device, vertexBufferMemory, nullptr);
+
         vkDestroyDevice(device, nullptr);
         
 
@@ -754,6 +774,41 @@ private:
         }
     }
 
+    void createVertexBuffer() {
+        VkBufferCreateInfo bufferInfo{};
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = sizeof(vertices[0]) * vertices.size();
+        // 可以指定多种用途
+        bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        if (vkCreateBuffer(device, &bufferInfo, nullptr, &vertexBuffer) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create vertex buffer!");
+        }
+
+        VkMemoryRequirements memRequirements;
+        vkGetBufferMemoryRequirements(device, vertexBuffer, &memRequirements);
+        VkMemoryAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        allocInfo.allocationSize = memRequirements.size;
+        // VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT 可以通过mapmemory提供host的访问能力
+        // VK_MEMORY_PROPERTY_HOST_COHERENT_BIT cache 通过一段chache（连续内存堆）coherent memory heap 提供更新mapmem的能力
+        // 类似bindbuffer中的指明buffer target的情况
+        allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        
+        if (vkAllocateMemory(device, &allocInfo, nullptr, &vertexBufferMemory) != VK_SUCCESS) {
+            throw std::runtime_error("failed to allocate vertex buffer memory!");
+        }
+        // 类似于bindbuffer 把buffer和memory进行绑定
+        vkBindBufferMemory(device, vertexBuffer, vertexBufferMemory, 0);
+        // 类似bufferdata 异步的 可以加回调
+        void* data;
+        vkMapMemory(device, vertexBufferMemory, 0, bufferInfo.size, 0, &data);
+        memcpy(data, vertices.data(), (size_t)bufferInfo.size);
+        vkUnmapMemory(device, vertexBufferMemory);
+
+    }
+
     void createCommandBuffers() {
         commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
         VkCommandBufferAllocateInfo allocInfo{};
@@ -819,8 +874,12 @@ private:
             scissor.extent = swapChainExtent;
             vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
+            VkBuffer vertexBuffers[] = {vertexBuffer};
+            VkDeviceSize offsets[] = {0};
+            vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+
             // instance rendering
-            vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+            vkCmdDraw(commandBuffer, static_cast<uint32_t>(vertices.size()), 1, 0, 0);
 
         vkCmdEndRenderPass(commandBuffer);
 
@@ -904,7 +963,21 @@ private:
                 throw std::runtime_error("failed to create synchronization objects for a frame!");
             }
         }
+
         
+    }
+
+    uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
+        VkPhysicalDeviceMemoryProperties memProperties;
+        vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
+
+        for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
+            if (typeFilter & (1 << i) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+                return i;
+            }
+        }
+
+        throw std::runtime_error("failed to find suitable memory type!");
     }
 
     VkShaderModule createShaderModule(const std::vector<char>& code) {
