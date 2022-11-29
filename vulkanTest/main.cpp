@@ -109,16 +109,17 @@ struct UniformBufferObject {
     glm::mat4 model;
     glm::mat4 view;
     glm::mat4 proj;
+    float time;
 };
 const std::vector<Vertex> vertices = {
-    // {{-1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}},
-    // {{1.0f, 1.0f}, {0.0f, 1.0f, 0.0f}},
-    // {{-1.0f, 1.0f}, {0.0f, 0.0f, 1.0f}},
-    // {{1.0f, -1.0f}, {0.0f, 0.0f, 1.0f}},
-    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-    {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-    {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-    {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+    {{-1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}},
+    {{1.0f, -1.0f}, {0.0f, 1.0f, 0.0f}},
+    {{1.0f, 1.0f}, {0.0f, 0.0f, 1.0f}},
+    {{-1.0f, 1.0f}, {0.0f, 0.0f, 1.0f}},
+    // {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    // {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+    // {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+    // {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
 };
 
 const std::vector<uint16_t> indices = {
@@ -1138,9 +1139,10 @@ private:
 
         UniformBufferObject ubo{};
         // 每秒90° z轴
-        ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-        ubo.view = glm::lookAt(glm::vec3(2.0f,2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-        ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width/(float) swapChainExtent.height, 0.1f, 10.0f);
+        ubo.model = glm::rotate(glm::mat4(1.0f), std::cos(time) * glm::radians(10.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        ubo.view = glm::lookAt(glm::vec3(0.0f,0.001f, 1.6f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width/(float) swapChainExtent.height, 0.01f, 10.0f);
+        ubo.time = time;
         // glm以gl为标准 vulkan中-1为上，兼容一下
         ubo.proj[1][1] *= -1;
         memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
