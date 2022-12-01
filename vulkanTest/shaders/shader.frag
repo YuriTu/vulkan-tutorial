@@ -2,10 +2,10 @@
 layout(location = 0) in vec3 fragColor;
 layout(location = 1) in float time;
 layout(location = 0) out vec4 outColor;
-vec2 resolution = vec2(800.0, 600.0);
+vec2 resolution = vec2(1920.0, 1080.0);
 
 #define PI 3.14159265359
-#define POINT_COUNT 10
+#define POINT_COUNT 14
 
 
 vec2 points[POINT_COUNT];
@@ -150,13 +150,13 @@ void main( void ) {
 	//dist = step(distance(pos,point),0.1);
 	float glow = getGlow(dist, radius, intensity);
 	
-	col += glow * vec3(1.0, 0.0, 0.);
+	col += glow * vec3(0.4, 0.1, 0.8);
 	//col += 10. * vec3(sommthstep(0.006,0.003, dist));
 	
-	dist = getSegment(time, pos, 3.2);
+	dist = getSegment(time, pos, 3.1);
 	glow = getGlow(dist, radius, intensity);
 	
-	col += glow * vec3(.1, .4, 1.);
+	col += glow * vec3(.1, .4, .8);
 	
 	
 	vec3 color = vec3(col);

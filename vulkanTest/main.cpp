@@ -79,8 +79,11 @@ struct Vertex {
     // 交错式的数据输入方式和gl类似 
     static VkVertexInputBindingDescription getBindingDescription() {
         VkVertexInputBindingDescription bindingDescription{};
+        // 所有的binds类似array 需要一个index
         bindingDescription.binding = 0;
+        // 每个数据的间隔
         bindingDescription.stride = sizeof(Vertex);
+        // 数据排列是vertex还是instance顺序
         bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
         return bindingDescription;
@@ -88,9 +91,9 @@ struct Vertex {
     static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions() {
         
         std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
-        // 说明attar去哪个bind（vertex buffer）
+        // 说明attar去哪个binding 和上面的对应
         attributeDescriptions[0].binding = 0;
-        // shader里面的哪个location
+        // shader里面的哪个 location
         attributeDescriptions[0].location = 0;
         // 数据情况 vec3\2\4 ?
         attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
@@ -876,9 +879,11 @@ private:
 
     void createUniformBuffers() {
         VkDeviceSize bufferSize = sizeof(UniformBufferObject);
-
+        // buffer
         uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+        // 代表的mem
         uniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
+        // map通道的待填充数据
         uniformBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
 
         for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
