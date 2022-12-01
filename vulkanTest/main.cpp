@@ -108,11 +108,13 @@ struct Vertex {
         return attributeDescriptions;
     }
 };
+// 所有的数据一定要以16 对齐
 struct UniformBufferObject {
-    glm::mat4 model;
+    glm::vec2 foo;
+    alignas(16)glm::mat4 model;
     glm::mat4 view;
     glm::mat4 proj;
-    glm::vec2 foo;
+    
 };
 const std::vector<Vertex> vertices = {
     // {{-1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}},
@@ -1202,7 +1204,7 @@ private:
         VkSwapchainKHR swapChains[] = {swapChain};
         presentInfo.swapchainCount = 1;
         presentInfo.pSwapchains = swapChains;
-        
+
         presentInfo.pImageIndices = &imageIndex;
         // 多个swapchain的时候使用
         presentInfo.pResults = nullptr;
