@@ -112,21 +112,22 @@ struct UniformBufferObject {
     glm::mat4 model;
     glm::mat4 view;
     glm::mat4 proj;
-    float time;
+    glm::vec2 foo;
 };
 const std::vector<Vertex> vertices = {
-    {{-1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}},
-    {{1.0f, -1.0f}, {0.0f, 1.0f, 0.0f}},
-    {{1.0f, 1.0f}, {0.0f, 0.0f, 1.0f}},
-    {{-1.0f, 1.0f}, {0.0f, 0.0f, 1.0f}},
-    // {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-    // {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-    // {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-    // {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+    // {{-1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}},
+    // {{1.0f, -1.0f}, {0.0f, 1.0f, 0.0f}},
+    // {{1.0f, 1.0f}, {0.0f, 0.0f, 1.0f}},
+    // {{-1.0f, 1.0f}, {0.0f, 0.0f, 1.0f}},
+    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+    {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
 };
 
 const std::vector<uint16_t> indices = {
-    2, 1, 0, 0, 3, 2
+    0, 1, 2, 2, 3, 0
+    // 2, 1, 0, 0, 3, 2
 };
 
 class HelloTriangleApplication {
@@ -699,7 +700,7 @@ private:
         // 前向还是后项渲染： 背面三角被抛弃
         rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
         // 多边形朝向判断方式：顺时针
-        rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+        rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
         // 多边形偏移 shadowmap会用
         rasterizer.depthBiasEnable = VK_FALSE;
         rasterizer.depthBiasConstantFactor = 0.0f;
@@ -1147,7 +1148,6 @@ private:
         ubo.model = glm::rotate(glm::mat4(1.0f), std::cos(time) * glm::radians(10.0f), glm::vec3(0.0f, 1.0f, 0.0f));
         ubo.view = glm::lookAt(glm::vec3(0.0f,0.001f, 1.6f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
         ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width/(float) swapChainExtent.height, 0.01f, 10.0f);
-        ubo.time = time;
         // glm以gl为标准 vulkan中-1为上，兼容一下
         ubo.proj[1][1] *= -1;
         memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
@@ -1195,12 +1195,14 @@ private:
         // 开画
         VkPresentInfoKHR presentInfo{};
         presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+
         presentInfo.waitSemaphoreCount = 1;
         presentInfo.pWaitSemaphores = signalSemaphores;
 
         VkSwapchainKHR swapChains[] = {swapChain};
         presentInfo.swapchainCount = 1;
         presentInfo.pSwapchains = swapChains;
+        
         presentInfo.pImageIndices = &imageIndex;
         // 多个swapchain的时候使用
         presentInfo.pResults = nullptr;
@@ -1367,6 +1369,7 @@ private:
             if (indices.isComplete()) {
                 break;
             }
+
             i++;
         }
         std::cout << "graph index" << i << std::endl;
@@ -1419,11 +1422,27 @@ private:
                 return false;
             }
         }
+
         return true;
     }
+    
+    static std::vector<char> readFile(const std::string& filename) {
+        std::ifstream file(filename, std::ios::ate | std::ios::binary);
 
-    
-    
+        if (!file.is_open()) {
+            throw std::runtime_error("failed to open file!");
+        }
+
+        size_t fileSize = (size_t) file.tellg();
+        std::vector<char> buffer(fileSize);
+
+        file.seekg(0);
+        file.read(buffer.data(), fileSize);
+
+        file.close();
+
+        return buffer;
+    }
     //VKAPI_ATTR  c 的预处理器 preprocesser 用来给不同的编辑器做提示的 spec：https://registry.khronos.org/vulkan/specs/1.0-extensions/html/vkspec.html#boilerplate-platform-specific-calling-conventions
     static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
         VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
@@ -1439,23 +1458,6 @@ private:
 
         // 行为是否应该被中断
         return VK_FALSE;
-    }
-
-    static std::vector<char> readFile(const std::string& filename) {
-        std::ifstream file(filename, std::ios::ate | std::ios::binary);
-
-        if (!file.is_open()) {
-            throw std::runtime_error("failed to open file!");
-        }
-
-        size_t fileSize = (size_t) file.tellg();
-        std::vector<char> buffer(fileSize);
-
-        file.seekg(0);
-        file.read(buffer.data(), fileSize);
-        file.close();
-
-        return buffer;
     }
 };
 
